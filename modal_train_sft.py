@@ -26,6 +26,7 @@ image = (
         "accelerate==0.34.2",
         "datasets==2.20.0",
         "sentencepiece",
+        "rich",
     )
 )
 
