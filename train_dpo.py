@@ -41,8 +41,8 @@ def load_dataset(path: str, tokenizer) -> Dataset:
         ]
         return {
             "prompt": tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True),
-            "chosen": record["chosen"],
-            "rejected": record["rejected"],
+            "chosen": record["chosen"] + tokenizer.eos_token,
+            "rejected": record["rejected"] + tokenizer.eos_token,
         }
 
     dataset = Dataset.from_list(records)
@@ -73,8 +73,13 @@ def get_lora_config() -> LoraConfig:
 def main(sft_adapter: str | None, output_dir: str, beta: float, epochs: int, batch_size: int):
     print(f"Loading {BASE_MODEL} in 4-bit...")
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-    tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"  # required for decoder-only DPO
+    # Qwen 2.5 has no pad token by default and may return a list for eos_token_id.
+    # TRL 0.9.6's data collator requires pad_token_id to be a plain integer.
+    if tokenizer.pad_token_id is None:
+        eos_id = tokenizer.eos_token_id
+        tokenizer.pad_token_id = eos_id[0] if isinstance(eos_id, list) else eos_id
+        tokenizer.pad_token = tokenizer.convert_ids_to_tokens(tokenizer.pad_token_id)
 
     print(f"Loading dataset from {DATA_FILE}...")
     dataset = load_dataset(DATA_FILE, tokenizer)
