@@ -1,0 +1,7 @@
+.env.local
+data/checkpoint.json
+data/prompts_cache.json
+outputs/
+__pycache__/
+*.pyc
+.DS_Store
