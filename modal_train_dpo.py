@@ -23,7 +23,7 @@ image = (
     .pip_install("torch==2.5.1", extra_index_url="https://download.pytorch.org/whl/cu124")
     .pip_install(
         "transformers==4.44.2",
-        "trl==0.10.0",
+        "trl==0.10.1",
         "peft==0.12.0",
         "bitsandbytes==0.43.1",
         "accelerate==0.34.2",
