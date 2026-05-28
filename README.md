@@ -60,15 +60,21 @@ python generate_dataset.py          # full run
 ```bash
 # One-time setup
 modal secret create huggingface-secret HF_TOKEN=hf_...
+modal secret create anthropic-secret ANTHROPIC_API_KEY=sk-ant-...
+modal volume create conversational-post-training-outputs
 modal volume put conversational-post-training-outputs data/preference_pairs.json /data/preference_pairs.json
 
 # SFT (~2-3hrs, ~$3)
 modal run modal_train_sft.py
 
-# DPO — run all three betas
+# DPO — run all three betas (~2-3hrs each)
 modal run modal_train_dpo.py --beta 0.05
 modal run modal_train_dpo.py --beta 0.1
 modal run modal_train_dpo.py --beta 0.2
+
+# Eval — all five checkpoints (~4-5hrs)
+modal run modal_eval.py
+modal volume get conversational-post-training-outputs /results ./results
 ```
 
 ## Limitations

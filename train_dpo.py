@@ -29,38 +29,6 @@ SYSTEM_PROMPT = (
 )
 
 
-class QwenDPOTrainer(DPOTrainer):
-    """DPOTrainer subclass that handles Qwen 2.5's non-standard eos_token_id.
-
-    TRL 0.9.6's build_tokenized_answer does:
-        answer_input_ids += [self.tokenizer.eos_token_id]
-    For Qwen 2.5, eos_token_id can be a list or None, which produces None
-    values inside token ID lists and crashes the data collator. We resolve
-    it to a plain int once per call instead of reading the property directly.
-    """
-
-    def build_tokenized_answer(self, prompt, answer):
-        eos_id = self.tokenizer.eos_token_id
-        if isinstance(eos_id, list):
-            eos_id = eos_id[0]
-        if eos_id is None:
-            # Fallback: look up the ChatML end token directly
-            eos_id = self.tokenizer.convert_tokens_to_ids(
-                self.tokenizer.eos_token or "<|im_end|>"
-            )
-
-        full_tokenized = self.tokenizer(prompt + answer, add_special_tokens=False)
-        prompt_input_ids = self.tokenizer(prompt, add_special_tokens=False)["input_ids"]
-
-        answer_input_ids = full_tokenized["input_ids"][len(prompt_input_ids):]
-        answer_attention_mask = full_tokenized["attention_mask"][len(prompt_input_ids):]
-
-        answer_input_ids += [int(eos_id)]
-        answer_attention_mask += [1]
-
-        return dict(input_ids=answer_input_ids, attention_mask=answer_attention_mask)
-
-
 def load_dataset(path: str, tokenizer) -> Dataset:
     with open(path) as f:
         records = json.load(f)
@@ -157,7 +125,7 @@ def main(sft_adapter: str | None, output_dir: str, beta: float, epochs: int, bat
         report_to="none",
     )
 
-    trainer = QwenDPOTrainer(
+    trainer = DPOTrainer(
         model=model,
         ref_model=None,
         args=training_args,
