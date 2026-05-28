@@ -22,8 +22,6 @@ from trl import DPOTrainer, DPOConfig
 
 BASE_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 DATA_FILE = "data/preference_pairs.json"
-MAX_LENGTH = 512
-LABEL_PAD_ID = -100
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant. Be direct, concise, and natural. "
@@ -31,85 +29,57 @@ SYSTEM_PROMPT = (
 )
 
 
-def resolve_eos_token(tokenizer) -> tuple[str, int]:
-    """Return (eos_token_str, eos_token_id) as plain str and int.
+class QwenDPOTrainer(DPOTrainer):
+    """DPOTrainer subclass that handles Qwen 2.5's non-standard eos_token_id.
 
-    Qwen 2.5's tokenizer config stores eos_token_id as a list and may leave
-    eos_token as None. TRL 0.9.6 appends eos_token_id directly into integer
-    lists, so it must be a plain int. We resolve it once here and use it
-    explicitly everywhere rather than relying on tokenizer attributes.
+    TRL 0.9.6's build_tokenized_answer does:
+        answer_input_ids += [self.tokenizer.eos_token_id]
+    For Qwen 2.5, eos_token_id can be a list or None, which produces None
+    values inside token ID lists and crashes the data collator. We resolve
+    it to a plain int once per call instead of reading the property directly.
     """
-    # Try the tokenizer's own eos_token first
-    tok_str = tokenizer.eos_token
-    tok_id = tokenizer.eos_token_id
 
-    # Unwrap list (Qwen 2.5 quirk)
-    if isinstance(tok_id, list):
-        tok_id = tok_id[0]
+    def build_tokenized_answer(self, prompt, answer):
+        eos_id = self.tokenizer.eos_token_id
+        if isinstance(eos_id, list):
+            eos_id = eos_id[0]
+        if eos_id is None:
+            # Fallback: look up the ChatML end token directly
+            eos_id = self.tokenizer.convert_tokens_to_ids(
+                self.tokenizer.eos_token or "<|im_end|>"
+            )
 
-    # If eos_token is missing, derive from id
-    if tok_str is None and tok_id is not None:
-        tok_str = tokenizer.convert_ids_to_tokens(tok_id)
+        full_tokenized = self.tokenizer(prompt + answer, add_special_tokens=False)
+        prompt_input_ids = self.tokenizer(prompt, add_special_tokens=False)["input_ids"]
 
-    # Final fallback for Qwen 2.5: <|im_end|> is the ChatML end token
-    if tok_str is None:
-        tok_str = "<|im_end|>"
-        tok_id = tokenizer.convert_tokens_to_ids(tok_str)
+        answer_input_ids = full_tokenized["input_ids"][len(prompt_input_ids):]
+        answer_attention_mask = full_tokenized["attention_mask"][len(prompt_input_ids):]
 
-    return tok_str, int(tok_id)
+        answer_input_ids += [int(eos_id)]
+        answer_attention_mask += [1]
+
+        return dict(input_ids=answer_input_ids, attention_mask=answer_attention_mask)
 
 
-def load_dataset(path: str, tokenizer, eos_token: str, max_length: int) -> Dataset:
-    """Pre-tokenize preference pairs into the exact columns DPOTrainer expects.
-
-    TRL 0.9.6 skips its internal tokenize_row() when the dataset has no
-    'chosen' column — so we produce the final token-ID columns ourselves,
-    avoiding all issues with Qwen's non-standard eos_token_id.
-    """
+def load_dataset(path: str, tokenizer) -> Dataset:
     with open(path) as f:
         records = json.load(f)
 
-    def tokenize_example(record):
+    def format_prompt(record):
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": record["prompt"]},
         ]
-        prompt_text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-
-        prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
-        n_prompt = len(prompt_ids)
-
-        # Tokenize full sequences — prompt + response + eos — as one string
-        # so the tokenizer handles any boundary effects consistently.
-        chosen_ids = tokenizer(
-            prompt_text + record["chosen"] + eos_token, add_special_tokens=False
-        )["input_ids"][:max_length]
-
-        rejected_ids = tokenizer(
-            prompt_text + record["rejected"] + eos_token, add_special_tokens=False
-        )["input_ids"][:max_length]
-
-        # Labels: full sequence with prompt tokens masked so loss is only on response
-        chosen_labels = [LABEL_PAD_ID] * n_prompt + chosen_ids[n_prompt:]
-        rejected_labels = [LABEL_PAD_ID] * n_prompt + rejected_ids[n_prompt:]
-
         return {
-            "prompt_input_ids":      prompt_ids,
-            "prompt_attention_mask": [1] * len(prompt_ids),
-            "chosen_input_ids":      chosen_ids,
-            "chosen_attention_mask": [1] * len(chosen_ids),
-            "chosen_labels":         chosen_labels,
-            "rejected_input_ids":    rejected_ids,
-            "rejected_attention_mask": [1] * len(rejected_ids),
-            "rejected_labels":       rejected_labels,
+            "prompt": tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            ),
+            "chosen": record["chosen"],
+            "rejected": record["rejected"],
         }
 
     dataset = Dataset.from_list(records)
-    # remove_columns drops 'prompt', 'chosen', 'rejected', 'category' —
-    # the absence of 'chosen' tells TRL 0.9.6 to skip its own tokenize_row()
-    return dataset.map(tokenize_example, remove_columns=dataset.column_names)
+    return dataset.map(format_prompt, remove_columns=["category"])
 
 
 def get_bnb_config() -> BitsAndBytesConfig:
@@ -136,16 +106,12 @@ def main(sft_adapter: str | None, output_dir: str, beta: float, epochs: int, bat
     print(f"Loading {BASE_MODEL} in 4-bit...")
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
     tokenizer.padding_side = "left"
-
-    eos_token, eos_token_id = resolve_eos_token(tokenizer)
-    # Ensure pad token is a plain integer (required by the data collator)
     if tokenizer.pad_token_id is None:
-        tokenizer.pad_token = eos_token
-        tokenizer.pad_token_id = eos_token_id
-    print(f"  eos_token={eos_token!r} ({eos_token_id}), pad_token={tokenizer.pad_token!r} ({tokenizer.pad_token_id})")
+        tokenizer.pad_token = tokenizer.eos_token or "<|im_end|>"
+        tokenizer.pad_token_id = tokenizer.convert_tokens_to_ids(tokenizer.pad_token)
 
     print(f"Loading dataset from {DATA_FILE}...")
-    dataset = load_dataset(DATA_FILE, tokenizer, eos_token=eos_token, max_length=MAX_LENGTH)
+    dataset = load_dataset(DATA_FILE, tokenizer)
     split = dataset.train_test_split(test_size=0.05, seed=42)
     train_data = split["train"]
     eval_data = split["test"]
@@ -178,7 +144,7 @@ def main(sft_adapter: str | None, output_dir: str, beta: float, epochs: int, bat
         lr_scheduler_type="cosine",
         warmup_ratio=0.1,
         beta=beta,
-        max_length=MAX_LENGTH,
+        max_length=512,
         max_prompt_length=256,
         bf16=True,
         logging_steps=10,
@@ -191,7 +157,7 @@ def main(sft_adapter: str | None, output_dir: str, beta: float, epochs: int, bat
         report_to="none",
     )
 
-    trainer = DPOTrainer(
+    trainer = QwenDPOTrainer(
         model=model,
         ref_model=None,
         args=training_args,
