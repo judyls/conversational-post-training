@@ -40,9 +40,11 @@ import anthropic
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
 from datasets import load_dataset as hf_load_dataset
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent / ".env.local")
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent / ".env.local")
+except ImportError:
+    pass
 
 BASE_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 JUDGE_MODEL = "claude-haiku-4-5-20251001"
