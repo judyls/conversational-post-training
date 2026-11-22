@@ -6,6 +6,9 @@ Fine-tuning Qwen 2.5 7B to respond conversationally — brief, natural, non-verb
 
 **Answer:** No — SFT alone is the better intervention at this scale. All three DPO runs collapsed and gave up most of the model's factual accuracy while style scores stayed high. Full analysis in [WRITE_UP.md](WRITE_UP.md).
 
+**[Try the comparison explorer →](https://judyls.github.io/conversational-post-training/)** — every response from all five
+checkpoints on the same held-out prompts, side by side. Recorded eval output, no live inference.
+
 ## Pipeline
 
 ```
@@ -92,6 +95,26 @@ modal run modal_train_dpo.py --beta 0.2
 modal run modal_eval.py
 modal volume get conversational-post-training-outputs /results ./results
 ```
+
+## The comparison explorer
+
+`docs/` is a static page that puts the base model and any tuned checkpoint side by side on the same
+prompt — the 45 conversational prompts and 50 task requests from the eval, plus all 100 TruthfulQA
+questions with per-checkpoint right/wrong marks.
+
+Every response it shows was generated during the eval run and saved; the page runs no model and calls
+no API, so it costs nothing to host and cannot drift from the numbers in the write-up.
+
+```bash
+modal volume get conversational-post-training-outputs /results ./results
+python build_demo_data.py          # results/*.json -> docs/data.json
+python -m http.server -d docs      # then open http://localhost:8000
+```
+
+`build_demo_data.py` also derives two style statistics the original eval did not record: mean response
+length and how concentrated each checkpoint's opening phrases are. At beta=0.05 the model opens 30% of
+its responses with one of two stock phrases, which is mode collapse visible in the text rather than in
+the scores.
 
 ## Limitations
 

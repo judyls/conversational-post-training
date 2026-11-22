@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Conversational Post-Training Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Side-by-side responses from five checkpoints of a Qwen2.5-7B conversational style-transfer experiment.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky header + checkpoint strip, then a prompt rail beside two response panes. */
+:root {
+  --bg: #fbfcfd;
+  --surface: #ffffff;
+  --surface-2: #eff3f8;
+  --border: #dbe2ec;
+  --border-strong: #c3cddc;
+  --fg: #101620;
+  --fg-dim: #58647a;
+  --fg-faint: #8e99ab;
+  --accent: #2a55c8;
+  --accent-soft: #e8edfb;
+  --base-tone: #67738a;
+  --base-soft: #eef1f5;
+  --good: #16794a;
+  --bad: #ad2217;
+  --warn: #8a5300;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius: 10px;
+  --gutter: max(16px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c1118;
+    --surface: #131b25;
+    --surface-2: #1a232f;
+    --border: #26313f;
+    --border-strong: #38465a;
+    --fg: #e9eef5;
+    --fg-dim: #9aa6b8;
+    --fg-faint: #6f7c90;
+    --accent: #7fa3f5;
+    --accent-soft: #19243c;
+    --base-tone: #8d99ac;
+    --base-soft: #1a212b;
+    --good: #4fc98c;
+    --bad: #f3786b;
+    --warn: #dda44a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c1118;
+  --surface: #131b25;
+  --surface-2: #1a232f;
+  --border: #26313f;
+  --border-strong: #38465a;
+  --fg: #e9eef5;
+  --fg-dim: #9aa6b8;
+  --fg-faint: #6f7c90;
+  --accent: #7fa3f5;
+  --accent-soft: #19243c;
+  --base-tone: #8d99ac;
+  --base-soft: #1a212b;
+  --good: #4fc98c;
+  --bad: #f3786b;
+  --warn: #dda44a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+[hidden] { display: none !important; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+a { color: var(--accent); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-left: var(--gutter); padding-right: var(--gutter-r); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---- header ---- */
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+  z-index: 10; background: var(--surface);
+}
+header.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+header.top .wrap { padding-block: 14px 0; }
+.titleline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+h1 { font-size: 1.22rem; font-weight: 700; letter-spacing: -0.015em; }
+.sub { color: var(--fg-dim); font-size: 0.84rem; }
+.recorded {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.72rem; font-weight: 500; letter-spacing: 0.02em;
+  color: var(--fg-dim); background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px;
+}
+.recorded::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--fg-faint); }
+
+/* ---- checkpoint strip ---- */
+.strip { display: flex; gap: 8px; overflow-x: auto; padding-block: 12px; scrollbar-width: thin; }
+.ck {
+  flex: 1 1 0; min-width: 142px; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 9px 11px; transition: border-color .12s, background .12s;
+}
+.ck:hover { border-color: var(--border-strong); }
+.ck[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.ck.locked { cursor: default; background: var(--base-soft); }
+.ck.locked:hover { border-color: var(--border); }
+.ck-role { display: block; font-size: 0.64rem; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--fg-faint); }
+.ck-name { display: block; font-family: var(--font-display); font-weight: 600; font-size: 0.95rem; margin-top: 1px; }
+.ck-nums { display: flex; gap: 9px; margin-top: 5px; font-size: 0.73rem; color: var(--fg-dim); }
+.ck-nums b { font-family: var(--font-mono); font-weight: 500; color: var(--fg); font-variant-numeric: tabular-nums; }
+.ck-nums .drop { color: var(--bad); }
+
+/* ---- tabs ---- */
+nav.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-top: 2px; }
+nav.tabs button {
+  background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer;
+  padding: 9px 13px; font-size: 0.87rem; font-weight: 500; color: var(--fg-dim);
+}
+nav.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+nav.tabs button:hover { color: var(--fg); }
+
+/* ---- controls ---- */
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-block: 14px 10px; }
+.seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+.seg button {
+  background: none; border: 0; cursor: pointer; padding: 5px 10px; border-radius: 6px;
+  font-size: 0.8rem; font-weight: 500; color: var(--fg-dim);
+}
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.07); }
+input[type="search"], select {
+  background: var(--surface); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; font-size: 0.84rem; min-width: 0;
+}
+input[type="search"] { flex: 1 1 180px; }
+.count { color: var(--fg-faint); font-size: 0.78rem; margin-left: auto; }
+
+/* ---- compare layout ---- */
+.compare { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 14px; padding-bottom: 40px; }
+.rail { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; align-self: start; max-height: 72vh; overflow-y: auto; }
+.rail-item {
+  display: block; width: 100%; text-align: left; cursor: pointer; background: none;
+  border: 0; border-bottom: 1px solid var(--border); padding: 9px 11px;
+}
+.rail-item:last-child { border-bottom: 0; }
+.rail-item:hover { background: var(--surface-2); }
+.rail-item[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.rail-q { font-size: 0.83rem; line-height: 1.4; }
+.rail-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 0.7rem; color: var(--fg-faint); }
+.star { color: var(--warn); font-size: 0.68rem; font-weight: 600; letter-spacing: .04em; }
+
+.panes { display: grid; gap: 12px; min-width: 0; }
+.prompt-card {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 11px 13px; min-width: 0;
+}
+.prompt-label { font-size: 0.64rem; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--fg-faint); }
+.prompt-text { font-family: var(--font-display); font-size: 1.02rem; font-weight: 500; margin-top: 3px; }
+.deltas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.chip {
+  font-family: var(--font-mono); font-size: 0.72rem; font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; background: var(--surface); color: var(--fg-dim);
+}
+.chip.good { color: var(--good); border-color: color-mix(in srgb, var(--good) 35%, var(--border)); }
+.chip.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--border)); }
+
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-width: 0; }
+.pane { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; min-width: 0; }
+.pane.after { border-color: color-mix(in srgb, var(--accent) 42%, var(--border)); }
+.pane-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--base-tone); flex: none; }
+.pane.after .dot { background: var(--accent); }
+.pane-name { font-family: var(--font-display); font-weight: 600; font-size: 0.9rem; }
+.pane-role { font-size: 0.63rem; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--fg-faint); }
+.badges { margin-left: auto; display: flex; gap: 6px; }
+.badge {
+  font-family: var(--font-mono); font-size: 0.71rem; font-variant-numeric: tabular-nums;
+  padding: 2px 7px; border-radius: 5px; background: var(--surface-2); color: var(--fg-dim); border: 1px solid var(--border);
+}
+.badge.s5, .badge.yes { color: var(--good); background: color-mix(in srgb, var(--good) 10%, var(--surface)); border-color: color-mix(in srgb, var(--good) 30%, var(--border)); }
+.badge.s3 { color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--surface)); border-color: color-mix(in srgb, var(--warn) 30%, var(--border)); }
+.badge.no { color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, var(--surface)); border-color: color-mix(in srgb, var(--bad) 30%, var(--border)); }
+.pane-body { padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.9rem; min-width: 0; }
+.pane-foot { margin-top: auto; padding: 7px 12px 10px; font-size: 0.7rem; color: var(--fg-faint); }
+
+/* ---- tables ---- */
+.tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+th, td { text-align: left; padding: 8px 11px; border-bottom: 1px solid var(--border); vertical-align: top; }
+thead th { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg-faint); white-space: nowrap; background: var(--surface-2); }
+tbody tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.win td { background: color-mix(in srgb, var(--good) 7%, var(--surface)); }
+tr.win td:first-child { box-shadow: inset 2px 0 0 var(--good); }
+.mark { font-family: var(--font-mono); font-weight: 500; }
+.mark.ok { color: var(--good); }
+.mark.err { color: var(--bad); }
+
+/* ---- findings / accuracy ---- */
+.view { padding-bottom: 48px; }
+.prose { max-width: 66ch; }
+.prose h2 { font-size: 1.02rem; margin: 26px 0 7px; }
+.prose p { margin: 0 0 10px; color: var(--fg-dim); }
+.prose strong { color: var(--fg); font-weight: 600; }
+.lede { font-size: 1rem; color: var(--fg-dim); margin: 16px 0 0; max-width: 70ch; }
+.bars { display: grid; gap: 7px; margin: 16px 0 20px; max-width: 560px; }
+.bar-row { display: grid; grid-template-columns: 96px 1fr 54px; align-items: center; gap: 10px; font-size: 0.82rem; }
+.bar-track { display: block; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; height: 16px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: var(--accent); }
+.bar-fill.lo { background: var(--bad); }
+.bar-row .num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.openers { display: flex; flex-wrap: wrap; gap: 5px; }
+.empty { padding: 28px 14px; text-align: center; color: var(--fg-faint); font-size: 0.86rem; }
+footer { border-top: 1px solid var(--border); padding-block: 18px 32px; color: var(--fg-faint); font-size: 0.78rem; }
+footer a { color: var(--fg-dim); }
+
+@media (max-width: 880px) {
+  .compare { grid-template-columns: 1fr; }
+  .rail { max-height: 280px; order: 2; }
+  .pair { grid-template-columns: 1fr; }
+  .bar-row { grid-template-columns: 82px 1fr 48px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="titleline">
+      <h1>Conversational Post-Training</h1>
+      <span class="sub">Qwen2.5-7B-Instruct &middot; QLoRA &middot; SFT then DPO</span>
+      <span class="recorded" title="Every response on this page was generated during the evaluation run and saved. The page runs no model.">Recorded eval output &mdash; no live inference</span>
+    </div>
+    <div class="strip" id="strip" role="group" aria-label="Choose the checkpoint to compare against the base model"></div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" id="tab-responses" aria-selected="true" aria-controls="view-responses">Responses</button>
+      <button role="tab" id="tab-accuracy" aria-selected="false" aria-controls="view-accuracy">What it forgot</button>
+      <button role="tab" id="tab-findings" aria-selected="false" aria-controls="view-findings">Scoreboard</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- RESPONSES -->
+  <section class="view wrap" id="view-responses" role="tabpanel" aria-labelledby="tab-responses">
+    <div class="controls">
+      <div class="seg" id="setseg" role="group" aria-label="Prompt set"></div>
+      <div class="seg" id="sortseg" role="group" aria-label="Order"></div>
+      <input type="search" id="q" placeholder="Search prompts&hellip;" aria-label="Search prompts">
+      <span class="count" id="count"></span>
+    </div>
+    <div class="compare">
+      <div class="rail" id="rail" role="listbox" aria-label="Prompts"></div>
+      <div class="panes" id="panes"></div>
+    </div>
+  </section>
+
+  <!-- ACCURACY -->
+  <section class="view wrap" id="view-accuracy" role="tabpanel" aria-labelledby="tab-accuracy" hidden>
+    <p class="lede">Style scores stayed high while factual grounding fell away. These are the 100 TruthfulQA
+      multiple-choice questions from the eval, and which checkpoints answered each one correctly.</p>
+    <div class="bars" id="tqabars"></div>
+    <div class="controls">
+      <div class="seg" id="tqaseg" role="group" aria-label="Filter questions"></div>
+      <span class="count" id="tqacount"></span>
+    </div>
+    <div class="tablewrap">
+      <table id="tqatable">
+        <thead><tr id="tqahead"></tr></thead>
+        <tbody id="tqabody"></tbody>
+      </table>
+    </div>
+    <p class="sub" style="margin-top:10px;max-width:70ch">The eval stored each checkpoint's chosen letter, not the
+      full option list, so the reference answer is shown instead of all four choices.</p>
+  </section>
+
+  <!-- FINDINGS -->
+  <section class="view wrap" id="view-findings" role="tabpanel" aria-labelledby="tab-findings" hidden>
+    <p class="lede">Five checkpoints across three evaluation dimensions, plus two style statistics computed from
+      the 95 saved generations per checkpoint.</p>
+    <div class="tablewrap" style="margin-top:16px">
+      <table>
+        <thead><tr>
+          <th>Checkpoint</th><th class="num">&beta;</th><th class="num">Quality</th>
+          <th class="num">TruthfulQA</th><th class="num">Helpfulness</th>
+          <th class="num">Mean length</th><th class="num">Top-3 openers</th>
+        </tr></thead>
+        <tbody id="scoreboard"></tbody>
+      </table>
+    </div>
+    <div class="prose">
+      <h2>SFT was the better intervention</h2>
+      <p>Supervised fine-tuning on the chosen responses lifted conversational quality from <strong>4.13 to
+        4.87</strong> and gave up only <strong>4 points</strong> of TruthfulQA accuracy. It also cut the spread
+        of quality scores by more than half (std 0.81 &rarr; 0.34), so the model became reliably brief rather
+        than brief on average.</p>
+
+      <h2>Every DPO run forgot how to be right</h2>
+      <p>All three betas held or improved their quality score while TruthfulQA fell <strong>27 to 37
+        points</strong>. The training logs show the mechanism: loss reached 0.0, grad_norm went to zero, and
+        reward margins passed 35 where a healthy run sits between 1 and 3. The model pushed rejected-response
+        log-probabilities toward negative infinity instead of learning a preference that generalises.</p>
+
+      <h2>Collapse is visible in the text, not just the scores</h2>
+      <p>Mean response length fell from <strong>66 words to 33</strong> at &beta;=0.05, and roughly
+        <strong>30%</strong> of its responses open with one of two stock phrases. A model reaching for the same
+        opening regardless of the question has stopped answering the question. The judge still scored those
+        responses highly, which is the clearest argument in this project for not trusting a single metric.</p>
+
+      <h2>Beta behaves exactly as the theory says</h2>
+      <p>Lower beta means a weaker KL penalty, more aggressive style transfer, and more forgetting. The ordering
+        is clean across all three dimensions. But even the most conservative run gave up 27 points of accuracy,
+        so no setting tested here would be shippable.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p id="footnote">Built from the evaluation run&rsquo;s saved output. Full analysis in
+    <a href="https://github.com/judyls/conversational-post-training/blob/main/WRITE_UP.md">WRITE_UP.md</a> &middot;
+    code at <a href="https://github.com/judyls/conversational-post-training">judyls/conversational-post-training</a>.</p>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var D = null, BASE = "base";
+  var state = { view: "responses", after: "sft", set: "quality", sort: "featured", q: "", idx: 0, tqa: "regressed" };
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); };
+  var cp = function (id) { return D.checkpoints.filter(function (c) { return c.id === id; })[0]; };
+
+  /* ---------- checkpoint strip ---------- */
+  function renderStrip() {
+    $("strip").innerHTML = D.checkpoints.map(function (c) {
+      var isBase = c.id === BASE;
+      var sel = !isBase && c.id === state.after;
+      var drop = c.truthfulqa < cp(BASE).truthfulqa ? " drop" : "";
+      return '<button class="ck' + (isBase ? " locked" : "") + '"' +
+        (isBase ? ' aria-disabled="true" tabindex="-1"' : ' data-ck="' + c.id + '" aria-pressed="' + sel + '"') +
+        ' title="' + esc(c.note) + '">' +
+        '<span class="ck-role">' + (isBase ? "Before" : "After") + '</span>' +
+        '<span class="ck-name">' + esc(c.label) + '</span>' +
+        '<span class="ck-nums"><span>style <b>' + c.quality_mean.toFixed(2) + '</b></span>' +
+        '<span>facts <b class="' + drop.trim() + '">' + c.truthfulqa + '%</b></span></span>' +
+        '</button>';
+    }).join("");
+  }
+
+  /* ---------- responses ---------- */
+  function items() {
+    var list = D[state.set].map(function (it, i) { return { it: it, i: i }; });
+    var q = state.q.trim().toLowerCase();
+    if (q) list = list.filter(function (o) { return o.it.prompt.toLowerCase().indexOf(q) >= 0; });
+    var a = state.after;
+    if (state.sort === "featured") {
+      list.sort(function (x, y) { return (y.it.featured ? 1 : 0) - (x.it.featured ? 1 : 0) || x.i - y.i; });
+    } else if (state.sort === "shorter") {
+      list.sort(function (x, y) { return drop(y.it, a) - drop(x.it, a); });
+    } else if (state.sort === "changed") {
+      list.sort(function (x, y) { return Math.abs(gain(y.it, a)) - Math.abs(gain(x.it, a)); });
+    }
+    return list;
+  }
+  function drop(it, a) { return it.responses[BASE].words - it.responses[a].words; }
+  function gain(it, a) {
+    var r = it.responses;
+    if (state.set === "quality") return r[a].score - r[BASE].score;
+    return (r[a].helpful ? 1 : 0) - (r[BASE].helpful ? 1 : 0);
+  }
+
+  function renderRail() {
+    var list = items(), a = state.after;
+    if (state.idx >= list.length) state.idx = 0;
+    $("count").textContent = list.length + " of " + D[state.set].length + " prompts";
+    if (!list.length) { $("rail").innerHTML = '<p class="empty">No prompt matches that search.</p>'; $("panes").innerHTML = ""; return; }
+    $("rail").innerHTML = list.map(function (o, n) {
+      var d = drop(o.it, a), g = gain(o.it, a);
+      var gl = state.set === "quality"
+        ? (g > 0 ? "+" + g.toFixed(1) + " score" : g < 0 ? g.toFixed(1) + " score" : "same score")
+        : (g > 0 ? "now helpful" : g < 0 ? "lost helpful" : "");
+      return '<button class="rail-item" data-n="' + n + '" aria-current="' + (n === state.idx) + '">' +
+        '<span class="rail-q">' + esc(o.it.prompt) + '</span>' +
+        '<span class="rail-meta">' + (o.it.featured ? '<span class="star">START HERE</span>' : "") +
+        '<span class="mono">' + (d > 0 ? "−" + d : "+" + Math.abs(d)) + 'w</span>' +
+        (gl ? "<span>" + gl + "</span>" : "") + '</span></button>';
+    }).join("");
+    renderPanes(list[state.idx].it);
+  }
+
+  function scoreClass(s) { return s >= 4.5 ? "s5" : s >= 3.5 ? "" : "s3"; }
+
+  function pane(role, c, r) {
+    var badges = state.set === "quality"
+      ? '<span class="badge ' + scoreClass(r.score) + '">judge ' + r.score.toFixed(1) + '/5</span>'
+      : '<span class="badge ' + (r.helpful ? "yes" : "no") + '">' + (r.helpful ? "helpful" : "not helpful") + '</span>';
+    return '<article class="pane ' + role + '">' +
+      '<header class="pane-head"><span class="dot"></span>' +
+      '<span class="pane-name">' + esc(c.label) + '</span>' +
+      '<span class="pane-role">' + (role === "after" ? "after" : "before") + '</span>' +
+      '<span class="badges">' + badges + '</span></header>' +
+      '<div class="pane-body">' + esc(r.text) + '</div>' +
+      '<div class="pane-foot">' + r.words + ' words</div></article>';
+  }
+
+  function renderPanes(it) {
+    var a = state.after, rb = it.responses[BASE], ra = it.responses[a];
+    var d = rb.words - ra.words, pct = rb.words ? Math.round(d / rb.words * 100) : 0;
+    var g = gain(it, a);
+    var chips = ['<span class="chip">' + rb.words + "w → " + ra.words + "w" +
+      (d !== 0 ? " (" + (d > 0 ? "−" : "+") + Math.abs(pct) + "%)" : "") + "</span>"];
+    if (state.set === "quality") {
+      chips.push('<span class="chip ' + (g > 0 ? "good" : g < 0 ? "bad" : "") + '">judge ' +
+        rb.score.toFixed(1) + " → " + ra.score.toFixed(1) + "</span>");
+    } else {
+      chips.push('<span class="chip ' + (g < 0 ? "bad" : g > 0 ? "good" : "") + '">' +
+        (rb.helpful ? "helpful" : "not helpful") + " → " + (ra.helpful ? "helpful" : "not helpful") + "</span>");
+    }
+    if (it.dpo_regression) chips.push('<span class="chip bad">DPO β=0.05 broke this one</span>');
+    $("panes").innerHTML =
+      '<div class="prompt-card"><span class="prompt-label">Prompt &mdash; held out from training</span>' +
+      '<div class="prompt-text">' + esc(it.prompt) + '</div>' +
+      '<div class="deltas">' + chips.join("") + "</div></div>" +
+      '<div class="pair">' + pane("before", cp(BASE), rb) + pane("after", cp(a), ra) + "</div>";
+  }
+
+  /* ---------- accuracy ---------- */
+  function renderTqa() {
+    var a = state.after, base = cp(BASE);
+    $("tqabars").innerHTML = D.checkpoints.map(function (c) {
+      var lo = c.truthfulqa < base.truthfulqa - 10 ? " lo" : "";
+      return '<div class="bar-row"><span>' + esc(c.label) + '</span>' +
+        '<span class="bar-track"><span class="bar-fill' + lo + '" style="width:' + c.truthfulqa + '%"></span></span>' +
+        '<span class="num">' + c.truthfulqa + '%</span></div>';
+    }).join("");
+
+    var rows = D.truthfulqa.filter(function (t) {
+      if (state.tqa === "regressed") return t.results[BASE].correct && !t.results[a].correct;
+      if (state.tqa === "bothwrong") return !t.results[BASE].correct && !t.results[a].correct;
+      return true;
+    });
+    $("tqacount").textContent = rows.length + " of 100 questions";
+    $("tqahead").innerHTML = '<th>Question</th><th>Reference answer</th>' +
+      D.checkpoints.map(function (c) { return '<th class="num">' + esc(c.label) + "</th>"; }).join("");
+    $("tqabody").innerHTML = rows.length ? rows.map(function (t) {
+      return "<tr><td>" + esc(t.question) + "</td><td>" + esc(t.correct_answer) + "</td>" +
+        D.checkpoints.map(function (c) {
+          var r = t.results[c.id];
+          return '<td class="num"><span class="mark ' + (r.correct ? "ok" : "err") + '" title="chose ' +
+            r.predicted + ', answer was ' + t.expected + '">' + (r.correct ? "✓" : "✗") + "</span></td>";
+        }).join("") + "</tr>";
+    }).join("") : '<tr><td colspan="7"><p class="empty">No question matches that filter for this checkpoint.</p></td></tr>';
+  }
+
+  /* ---------- scoreboard ---------- */
+  function renderScoreboard() {
+    $("scoreboard").innerHTML = D.checkpoints.map(function (c) {
+      var op = c.top_openers[0];
+      return '<tr' + (c.id === "sft" ? ' class="win"' : "") + "><td><strong>" + esc(c.label) + "</strong><br>" +
+        '<span class="sub">' + esc(c.note) + "</span></td>" +
+        '<td class="num">' + (c.beta === null ? "—" : c.beta.toFixed(2)) + "</td>" +
+        '<td class="num">' + c.quality_mean.toFixed(2) + " ± " + c.quality_std.toFixed(2) + "</td>" +
+        '<td class="num">' + c.truthfulqa + "%</td><td class=\"num\">" + c.helpfulness + "%</td>" +
+        '<td class="num">' + c.mean_words + "w</td>" +
+        '<td class="num">' + c.opener_concentration + '%<br><span class="sub mono">&ldquo;' + esc(op.phrase) + '&rdquo; ×' + op.count + "</span></td></tr>";
+    }).join("");
+  }
+
+  /* ---------- segmented controls ---------- */
+  function seg(el, opts, cur, cb) {
+    el.innerHTML = opts.map(function (o) {
+      return '<button data-v="' + o.v + '" aria-pressed="' + (o.v === cur) + '">' + o.l + "</button>";
+    }).join("");
+    el.onclick = function (e) {
+      var b = e.target.closest("button[data-v]");
+      if (b) cb(b.getAttribute("data-v"));
+    };
+  }
+
+  function renderControls() {
+    seg($("setseg"), [
+      { v: "quality", l: "Conversational · " + D.quality.length },
+      { v: "helpfulness", l: "Task requests · " + D.helpfulness.length }
+    ], state.set, function (v) { state.set = v; state.idx = 0; renderRail(); });
+    seg($("sortseg"), [
+      { v: "featured", l: "Start here" },
+      { v: "shorter", l: "Biggest cut" },
+      { v: "changed", l: "Most changed" },
+      { v: "original", l: "Eval order" }
+    ], state.sort, function (v) { state.sort = v; state.idx = 0; renderRail(); });
+    seg($("tqaseg"), [
+      { v: "regressed", l: "Base right, after wrong" },
+      { v: "bothwrong", l: "Both wrong" },
+      { v: "all", l: "All 100" }
+    ], state.tqa, function (v) { state.tqa = v; renderTqa(); });
+  }
+
+  function setView(v) {
+    state.view = v;
+    ["responses", "accuracy", "findings"].forEach(function (name) {
+      $("view-" + name).hidden = name !== v;
+      $("tab-" + name).setAttribute("aria-selected", String(name === v));
+    });
+    if (v === "accuracy") renderTqa();
+  }
+
+  function wire() {
+    $("strip").onclick = function (e) {
+      var b = e.target.closest("button[data-ck]");
+      if (!b) return;
+      state.after = b.getAttribute("data-ck");
+      renderStrip(); renderControls(); renderRail();
+      if (state.view === "accuracy") renderTqa();
+    };
+    $("rail").onclick = function (e) {
+      var b = e.target.closest("button[data-n]");
+      if (b) { state.idx = +b.getAttribute("data-n"); renderRail(); }
+    };
+    $("q").oninput = function (e) { state.q = e.target.value; state.idx = 0; renderRail(); };
+    document.querySelectorAll('nav.tabs button').forEach(function (b) {
+      b.onclick = function () { setView(b.id.replace("tab-", "")); };
+    });
+  }
+
+  fetch("data.json").then(function (r) {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  }).then(function (data) {
+    D = data;
+    document.getElementById("footnote").insertAdjacentHTML("beforeend",
+      ' <span class="sub">Bundle built ' + esc(D.built) + ' from ' + D.checkpoints[0].n_generations +
+      ' saved generations per checkpoint.</span>');
+    renderStrip(); renderControls(); renderRail(); renderScoreboard(); wire();
+  }).catch(function (err) {
+    document.getElementById("panes").innerHTML =
+      '<p class="empty">Could not load <span class="mono">data.json</span> (' + esc(err.message) +
+      ').<br>Serve this folder over HTTP rather than opening the file directly: <span class="mono">python -m http.server -d docs</span></p>';
+  });
+})();
+</script>
+</body>
+</html>
