@@ -351,6 +351,7 @@ footer a { color: var(--fg-dim); }
 
   /* ---------- checkpoint strip ---------- */
   function renderStrip() {
+    if (!D) return;
     $("strip").innerHTML = D.checkpoints.map(function (c) {
       var isBase = c.id === BASE;
       var sel = !isBase && c.id === state.after;
@@ -389,6 +390,7 @@ footer a { color: var(--fg-dim); }
   }
 
   function renderRail() {
+    if (!D) return;
     var list = items(), a = state.after;
     if (state.idx >= list.length) state.idx = 0;
     $("count").textContent = list.length + " of " + D[state.set].length + " prompts";
@@ -445,6 +447,7 @@ footer a { color: var(--fg-dim); }
 
   /* ---------- accuracy ---------- */
   function renderTqa() {
+    if (!D) return;
     var a = state.after, base = cp(BASE);
     $("tqabars").innerHTML = D.checkpoints.map(function (c) {
       var lo = c.truthfulqa < base.truthfulqa - 10 ? " lo" : "";
@@ -473,6 +476,7 @@ footer a { color: var(--fg-dim); }
 
   /* ---------- scoreboard ---------- */
   function renderScoreboard() {
+    if (!D) return;
     $("scoreboard").innerHTML = D.checkpoints.map(function (c) {
       var op = c.top_openers[0];
       return '<tr' + (c.id === "sft" ? ' class="win"' : "") + "><td><strong>" + esc(c.label) + "</strong><br>" +
@@ -497,6 +501,7 @@ footer a { color: var(--fg-dim); }
   }
 
   function renderControls() {
+    if (!D) return;
     seg($("setseg"), [
       { v: "quality", l: "Conversational · " + D.quality.length },
       { v: "helpfulness", l: "Task requests · " + D.helpfulness.length }
@@ -541,20 +546,41 @@ footer a { color: var(--fg-dim); }
     });
   }
 
-  fetch("data.json").then(function (r) {
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    return r.json();
-  }).then(function (data) {
+  function boot(data) {
     D = data;
-    document.getElementById("footnote").insertAdjacentHTML("beforeend",
+    $("footnote").insertAdjacentHTML("beforeend",
       ' <span class="sub">Bundle built ' + esc(D.built) + ' from ' + D.checkpoints[0].n_generations +
       ' saved generations per checkpoint.</span>');
-    renderStrip(); renderControls(); renderRail(); renderScoreboard(); wire();
-  }).catch(function (err) {
-    document.getElementById("panes").innerHTML =
-      '<p class="empty">Could not load <span class="mono">data.json</span> (' + esc(err.message) +
-      ').<br>Serve this folder over HTTP rather than opening the file directly: <span class="mono">python -m http.server -d docs</span></p>';
-  });
+    renderStrip(); renderControls(); renderRail(); renderScoreboard();
+    if (state.view === "accuracy") renderTqa();
+  }
+
+  function fail(msg) {
+    var note = '<p class="empty">Could not load the response data (' + esc(msg) + ').<br>' +
+      'This page reads <span class="mono">data.json</span> from the same folder, which browsers block when the ' +
+      'file is opened directly from disk. Serve the folder instead:<br>' +
+      '<span class="mono">python3 -m http.server -d docs</span><br>' +
+      'or open the hosted copy at <span class="mono">judyls.github.io/conversational-post-training</span></p>';
+    $("panes").innerHTML = note;
+    $("rail").innerHTML = "";
+    $("count").textContent = "";
+    $("tqabody").innerHTML = '<tr><td colspan="7">' + note + "</td></tr>";
+    $("scoreboard").innerHTML = '<tr><td colspan="7">' + note + "</td></tr>";
+  }
+
+  // Navigation is wired before any data arrives, so the tabs always work even
+  // if the bundle fails to load.
+  wire();
+  setView("responses");
+
+  if (window.__EXPLORER_DATA__) {
+    boot(window.__EXPLORER_DATA__);
+  } else {
+    fetch("data.json").then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }).then(boot).catch(function (err) { fail(err.message); });
+  }
 })();
 </script>
 </body>
