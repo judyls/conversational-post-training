@@ -1,3 +1,15 @@
+# Versions are pinned to what the published results were produced with, on an
+# A10G with CUDA 12.4. They are reproducibility pins, not current pins: as of
+# late 2026 this torch/transformers pair carries known advisories, including
+# CVE-2025-32434 and CVE-2026-24747 (RCE via untrusted checkpoints) and
+# CVE-2026-4372 / CVE-2026-5241 (RCE in transformers).
+#
+# Those exploit paths all require loading an untrusted model, checkpoint or
+# dataset. This project loads only Qwen2.5-7B-Instruct from Hugging Face and
+# its own adapters, and sets no trust_remote_code anywhere, so the training
+# runs themselves are not exposed. Reusing this file as a starting point for
+# other work is a different matter - bump the stack first.
+
 torch==2.5.1
 transformers==4.44.2
 trl==0.9.6
