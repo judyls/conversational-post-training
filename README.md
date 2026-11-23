@@ -105,10 +105,12 @@ questions with per-checkpoint right/wrong marks.
 Every response it shows was generated during the eval run and saved; the page runs no model and calls
 no API, so it costs nothing to host and cannot drift from the numbers in the write-up.
 
+`docs/index.html` is one self-contained file with the responses embedded, so it opens straight from
+disk — no server, no build step, no dependencies. To rebuild it after a new eval run:
+
 ```bash
 modal volume get conversational-post-training-outputs /results ./results
-python build_demo_data.py          # results/*.json -> docs/data.json
-python -m http.server -d docs      # then open http://localhost:8000
+python build_demo_data.py          # embeds results/*.json into docs/index.html
 ```
 
 `build_demo_data.py` also derives two style statistics the original eval did not record: mean response

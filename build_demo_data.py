@@ -16,7 +16,7 @@ import pathlib
 from datetime import date
 
 RESULTS = pathlib.Path("results")
-OUT = pathlib.Path("docs/data.json")
+PAGE = pathlib.Path("docs/index.html")
 
 # Display order and labels. base first (the "before"), then the tuned runs.
 CHECKPOINTS = [
@@ -160,10 +160,16 @@ def main():
         "truthfulqa": truthfulqa,
     }
 
-    OUT.parent.mkdir(exist_ok=True)
-    OUT.write_text(json.dumps(bundle, separators=(",", ":")))
-    kb = OUT.stat().st_size / 1024
-    print(f"wrote {OUT} ({kb:.0f} KB)")
+    # Embed the bundle in the page rather than writing it alongside. Browsers
+    # block same-folder fetch() on file:// URLs, so a fetched bundle leaves the
+    # page blank for anyone who just opens index.html from disk.
+    blob = json.dumps(bundle, separators=(",", ":")).replace("<", "\\u003c")
+    page = PAGE.read_text()
+    start = page.index('<script id="bundle" type="application/json">') + len('<script id="bundle" type="application/json">')
+    end = page.index("</script>", start)
+    PAGE.write_text(page[:start] + blob + page[end:])
+    kb = PAGE.stat().st_size / 1024
+    print(f"wrote {PAGE} ({kb:.0f} KB, bundle embedded)")
     print(f"  {len(checkpoints)} checkpoints")
     print(f"  {len(quality)} quality prompts")
     print(f"  {len(helpfulness)} helpfulness prompts")
