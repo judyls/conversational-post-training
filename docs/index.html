@@ -350,7 +350,15 @@ footer a { color: var(--fg-dim); }
   var D = null, BASE = "base";
   var state = { view: "responses", after: "sft", set: "quality", sort: "featured", q: "", idx: 0, tqa: "regressed" };
   var $ = function (id) { return document.getElementById(id); };
-  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); };
+  // Everything the page renders comes from a generated bundle of model output,
+  // so every interpolated value is escaped: esc() for text and attributes,
+  // num() for anything placed in markup or a style declaration.
+  var esc = function (s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+    });
+  };
+  var num = function (v) { return Number.isFinite(+v) ? +v : 0; };
   var cp = function (id) { return D.checkpoints.filter(function (c) { return c.id === id; })[0]; };
 
   /* ---------- checkpoint strip ---------- */
@@ -361,12 +369,12 @@ footer a { color: var(--fg-dim); }
       var sel = !isBase && c.id === state.after;
       var drop = c.truthfulqa < cp(BASE).truthfulqa ? " drop" : "";
       return '<button class="ck' + (isBase ? " locked" : "") + '"' +
-        (isBase ? ' aria-disabled="true" tabindex="-1"' : ' data-ck="' + c.id + '" aria-pressed="' + sel + '"') +
+        (isBase ? ' aria-disabled="true" tabindex="-1"' : ' data-ck="' + esc(c.id) + '" aria-pressed="' + sel + '"') +
         ' title="' + esc(c.note) + '">' +
         '<span class="ck-role">' + (isBase ? "Before" : "After") + '</span>' +
         '<span class="ck-name">' + esc(c.label) + '</span>' +
         '<span class="ck-nums"><span>style <b>' + c.quality_mean.toFixed(2) + '</b></span>' +
-        '<span>facts <b class="' + drop.trim() + '">' + c.truthfulqa + '%</b></span></span>' +
+        '<span>facts <b class="' + drop.trim() + '">' + num(c.truthfulqa) + '%</b></span></span>' +
         '</button>';
     }).join("");
   }
@@ -425,14 +433,14 @@ footer a { color: var(--fg-dim); }
       '<span class="pane-role">' + (role === "after" ? "after" : "before") + '</span>' +
       '<span class="badges">' + badges + '</span></header>' +
       '<div class="pane-body">' + esc(r.text) + '</div>' +
-      '<div class="pane-foot">' + r.words + ' words</div></article>';
+      '<div class="pane-foot">' + num(r.words) + ' words</div></article>';
   }
 
   function renderPanes(it) {
     var a = state.after, rb = it.responses[BASE], ra = it.responses[a];
     var d = rb.words - ra.words, pct = rb.words ? Math.round(d / rb.words * 100) : 0;
     var g = gain(it, a);
-    var chips = ['<span class="chip">' + rb.words + "w → " + ra.words + "w" +
+    var chips = ['<span class="chip">' + num(rb.words) + "w → " + num(ra.words) + "w" +
       (d !== 0 ? " (" + (d > 0 ? "−" : "+") + Math.abs(pct) + "%)" : "") + "</span>"];
     if (state.set === "quality") {
       chips.push('<span class="chip ' + (g > 0 ? "good" : g < 0 ? "bad" : "") + '">judge ' +
@@ -456,8 +464,8 @@ footer a { color: var(--fg-dim); }
     $("tqabars").innerHTML = D.checkpoints.map(function (c) {
       var lo = c.truthfulqa < base.truthfulqa - 10 ? " lo" : "";
       return '<div class="bar-row"><span>' + esc(c.label) + '</span>' +
-        '<span class="bar-track"><span class="bar-fill' + lo + '" style="width:' + c.truthfulqa + '%"></span></span>' +
-        '<span class="num">' + c.truthfulqa + '%</span></div>';
+        '<span class="bar-track"><span class="bar-fill' + lo + '" style="width:' + num(c.truthfulqa) + '%"></span></span>' +
+        '<span class="num">' + num(c.truthfulqa) + '%</span></div>';
     }).join("");
 
     var rows = D.truthfulqa.filter(function (t) {
@@ -473,7 +481,7 @@ footer a { color: var(--fg-dim); }
         D.checkpoints.map(function (c) {
           var r = t.results[c.id];
           return '<td class="num"><span class="mark ' + (r.correct ? "ok" : "err") + '" title="chose ' +
-            r.predicted + ', answer was ' + t.expected + '">' + (r.correct ? "✓" : "✗") + "</span></td>";
+            esc(r.predicted) + ', answer was ' + esc(t.expected) + '">' + (r.correct ? "✓" : "✗") + "</span></td>";
         }).join("") + "</tr>";
     }).join("") : '<tr><td colspan="7"><p class="empty">No question matches that filter for this checkpoint.</p></td></tr>';
   }
@@ -487,16 +495,16 @@ footer a { color: var(--fg-dim); }
         '<span class="sub">' + esc(c.note) + "</span></td>" +
         '<td class="num">' + (c.beta === null ? "—" : c.beta.toFixed(2)) + "</td>" +
         '<td class="num">' + c.quality_mean.toFixed(2) + " ± " + c.quality_std.toFixed(2) + "</td>" +
-        '<td class="num">' + c.truthfulqa + "%</td><td class=\"num\">" + c.helpfulness + "%</td>" +
-        '<td class="num">' + c.mean_words + "w</td>" +
-        '<td class="num">' + c.opener_concentration + '%<br><span class="sub mono">&ldquo;' + esc(op.phrase) + '&rdquo; ×' + op.count + "</span></td></tr>";
+        '<td class="num">' + num(c.truthfulqa) + "%</td><td class=\"num\">" + num(c.helpfulness) + "%</td>" +
+        '<td class="num">' + num(c.mean_words) + "w</td>" +
+        '<td class="num">' + num(c.opener_concentration) + '%<br><span class="sub mono">&ldquo;' + esc(op.phrase) + '&rdquo; ×' + num(op.count) + "</span></td></tr>";
     }).join("");
   }
 
   /* ---------- segmented controls ---------- */
   function seg(el, opts, cur, cb) {
     el.innerHTML = opts.map(function (o) {
-      return '<button data-v="' + o.v + '" aria-pressed="' + (o.v === cur) + '">' + o.l + "</button>";
+      return '<button data-v="' + esc(o.v) + '" aria-pressed="' + (o.v === cur) + '">' + esc(o.l) + "</button>";
     }).join("");
     el.onclick = function (e) {
       var b = e.target.closest("button[data-v]");
@@ -553,7 +561,7 @@ footer a { color: var(--fg-dim); }
   function boot(data) {
     D = data;
     $("footnote").insertAdjacentHTML("beforeend",
-      ' <span class="sub">Bundle built ' + esc(D.built) + ' from ' + D.checkpoints[0].n_generations +
+      ' <span class="sub">Bundle built ' + esc(D.built) + ' from ' + num(D.checkpoints[0].n_generations) +
       ' saved generations per checkpoint.</span>');
     renderStrip(); renderControls(); renderRail(); renderScoreboard();
     if (state.view === "accuracy") renderTqa();
