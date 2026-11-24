@@ -727,7 +727,7 @@ footer p { max-width: 78ch; }
       "</div>" +
       '<p class="finding-note">At <strong>' + esc(worst.label) + '</strong> the model gave up <strong>' +
       num(lost) + ' points</strong> of TruthfulQA and half its words, and its three commonest openings now cover ' +
-      '<strong>' + num(worst.opener_concentration) + '%</strong> of all answers (&ldquo;' + esc(op.phrase) +
+      '<strong>' + num(worst.opener_concentration) + '%</strong> of its conversational answers (&ldquo;' + esc(op.phrase) +
       '&hellip;&rdquo; &times;' + num(op.count) + '). The judge still said <strong>' + fx(worst.quality_mean, 2) +
       "/5</strong>. One metric can hold steady while a model falls apart.</p></article>";
     $("findings").innerHTML = one + two;
