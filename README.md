@@ -114,9 +114,10 @@ python build_demo_data.py          # embeds results/*.json into docs/index.html
 ```
 
 `build_demo_data.py` also derives two style statistics the original eval did not record: mean response
-length and how concentrated each checkpoint's opening phrases are. At beta=0.05 the model opens 30% of
-its responses with one of two stock phrases, which is mode collapse visible in the text rather than in
-the scores.
+length and how concentrated each checkpoint's opening phrases are. At beta=0.05 the model opens 28 of
+the 50 task requests (56%) with one of two formulas — "Cut to the chase..." or "Jump right in..." —
+neither of which base or SFT uses once. That is mode collapse visible in the text rather than in the
+scores: the quality judge still scored those responses 4.78 of 5.
 
 ## Limitations
 

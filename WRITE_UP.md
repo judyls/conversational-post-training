@@ -42,7 +42,44 @@ DPO collapse happens when the model takes the path of least resistance — drivi
 
 The cause here is a combination of low beta values and a strong signal-to-noise ratio in the training data. With 375 preference pairs where the style difference between chosen and rejected is stark and consistent, the model can easily separate them — no subtle reasoning required. There's nothing stopping it from over-optimizing.
 
-## Finding 4: The answer to the research question
+## Finding 4: The collapse is visible in the text, and the judge rewarded it
+
+The three scored dimensions all missed something the generations show plainly. On the 50 held-out task
+requests, the beta=0.05 model opens **28 of 50 responses (56%)** with one of exactly two formulas:
+"Cut to the chase..." (11) and "Jump right in/into..." (17). Base and SFT use neither formula once
+across the same 50 prompts.
+
+| Checkpoint | Opens with one of two formulas | Mean length |
+|---|---|---|
+| base | 0 / 50 (0%) | 80.9 words |
+| sft | 0 / 50 (0%) | 61.2 words |
+| dpo-005 | 28 / 50 (56%) | 33.1 words |
+| dpo-010 | 21 / 50 (42%) | 34.9 words |
+| dpo-020 | 17 / 50 (34%) | 38.2 words |
+
+The rate tracks beta in the same direction as every other degradation: the lower the KL penalty, the
+more the model converges on a single opening move. This is mode collapse in the ordinary sense — the
+policy has found a small set of high-reward surface patterns and is reusing them regardless of what
+was asked. A model that answers more than half of all task requests with the same two openings has
+stopped responding to the question.
+
+The formulas concentrate in task requests and are rarer on the conversational prompts (7% at
+beta=0.05), which fits: "jump right into it" is a plausible opening for *write me X* and an odd one
+for *what's the difference between RAM and storage*. The collapse is conditional on prompt type, not
+uniform.
+
+**The part that matters for evaluation design:** the quality judge scored these responses 4.78/5 —
+0.09 below SFT's 4.87, well inside the spread of either run. The metric the training was implicitly
+optimizing toward registered no damage at all. Helpfulness (42%) and TruthfulQA (28%) caught it; the
+conversational-quality score did not, because a degenerate policy can saturate a surface-register
+metric. Had quality been the only eval, this run would read as a success.
+
+This is also the finding the original eval could not have produced. Mean response length and opener
+concentration are derived in `build_demo_data.py` from the saved generations after the fact — the eval
+recorded scores, not distributional statistics about the text. Reading the outputs found what three
+aggregate metrics hid.
+
+## Finding 5: The answer to the research question
 
 DPO does not generalize better than SFT alone for conversational style transfer at this scale.
 

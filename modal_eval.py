@@ -37,6 +37,37 @@ app = modal.App("conversational-post-training-eval")
 
 GITHUB_REPO = "https://github.com/judyls/conversational-post-training.git"
 
+# The GPU container executes whatever this repo's code says, with the Hugging Face
+# (and, for eval, Anthropic) secrets mounted. A bare `git clone` of the default branch
+# means "whatever happens to be on main when this launches" — so the ref is pinned to an
+# exact commit and the checkout is verified before any of it is imported. Bump GIT_REF
+# deliberately when you want to run newer code.
+GIT_REF = "0957beba0703ed720faa67415e9f84f1d671eb9d"
+
+
+def _checkout_pinned(dest: str = "/app") -> None:
+    """Fetch exactly GIT_REF into dest and refuse to continue if HEAD differs."""
+    import subprocess
+
+    if len(GIT_REF) != 40 or any(c not in "0123456789abcdef" for c in GIT_REF):
+        raise RuntimeError(
+            f"GIT_REF must be a full 40-character commit SHA, got {GIT_REF!r}. "
+            "Branch and tag names are mutable and are not accepted here."
+        )
+
+    subprocess.run(["git", "init", "--quiet", dest], check=True)
+    subprocess.run(["git", "-C", dest, "remote", "add", "origin", GITHUB_REPO], check=True)
+    subprocess.run(["git", "-C", dest, "fetch", "--quiet", "--depth", "1", "origin", GIT_REF], check=True)
+    subprocess.run(["git", "-C", dest, "checkout", "--quiet", "--detach", "FETCH_HEAD"], check=True)
+
+    head = subprocess.run(
+        ["git", "-C", dest, "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    if head != GIT_REF:
+        raise RuntimeError(f"refusing to run: pinned {GIT_REF}, checked out {head}")
+    print(f"running pinned commit {head}")
+
+
 # All five checkpoints to evaluate
 CHECKPOINTS = [
     ("base",    None),
@@ -58,11 +89,10 @@ CHECKPOINTS = [
     timeout=60 * 60 * 5,  # 5hr — evaluating 5 checkpoints takes longer than training
 )
 def run_eval(eval_type: str = "all", n_quality: int = 50, n_truthfulqa: int = 100, n_helpfulness: int = 50):
-    import subprocess
     import sys
     import os
 
-    subprocess.run(["git", "clone", GITHUB_REPO, "/app"], check=True)
+    _checkout_pinned("/app")
     sys.path.insert(0, "/app")
     os.chdir("/app")
 

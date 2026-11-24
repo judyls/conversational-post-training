@@ -623,10 +623,12 @@ footer p { max-width: 78ch; }
           log-probabilities toward negative infinity instead of learning a preference that generalises.</p>
 
         <h3>Collapse is visible in the text, not just the scores</h3>
-        <p>Mean response length fell from <strong>66 words to 33</strong> at &beta;=0.05, and roughly
-          <strong>30%</strong> of its responses open with one of two stock phrases. A model reaching for the same
-          opening regardless of the question has stopped answering the question. The judge still scored those
-          responses highly, which is the clearest argument in this project for not trusting a single metric.</p>
+        <p>Mean response length fell from <strong>66 words to 33</strong> at &beta;=0.05, and on the 50 task
+          requests it opens <strong>28 of 50 answers (56%)</strong> with one of just two formulas &mdash;
+          &ldquo;Cut to the chase&hellip;&rdquo; or &ldquo;Jump right in&hellip;&rdquo; &mdash; neither of which
+          base or SFT uses once. A model reaching for the same opening regardless of the question has stopped
+          answering the question. The judge still scored those responses <strong>4.78 of 5</strong>, which is the
+          clearest argument in this project for not trusting a single metric.</p>
 
         <h3>Beta behaves exactly as the theory says</h3>
         <p>Lower beta means a weaker KL penalty, more aggressive style transfer, and more forgetting. The ordering
