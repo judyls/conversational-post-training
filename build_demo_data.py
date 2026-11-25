@@ -18,13 +18,15 @@ from datetime import date
 RESULTS = pathlib.Path("results")
 PAGE = pathlib.Path("docs/index.html")
 
-# Display order and labels. base first (the "before"), then the tuned runs.
+# Display order, labels and notes. base first (the "before"), then the trained runs.
+# Labels are plain English because the page is written for readers who have never
+# heard of SFT or DPO; the note carries the method's real name for those who have.
 CHECKPOINTS = [
-    ("base",    "Base",          None,  "Qwen2.5-7B-Instruct, untouched"),
-    ("sft",     "SFT",           None,  "2 epochs on chosen responses only"),
-    ("dpo-005", "DPO β=0.05", 0.05, "Most aggressive style transfer"),
-    ("dpo-010", "DPO β=0.10", 0.10, "The DPO paper default"),
-    ("dpo-020", "DPO β=0.20", 0.20, "Most conservative"),
+    ("base",    "Original",         None,  "The model as it ships, with no training from us"),
+    ("sft",     "Imitate",          None,  "Shown 375 good answers to copy (SFT)"),
+    ("dpo-005", "Compare · hard",   0.05, "Shown good and bad answers, pushed hardest (DPO, β=0.05)"),
+    ("dpo-010", "Compare · medium", 0.10, "Shown good and bad answers, middle setting (DPO, β=0.10)"),
+    ("dpo-020", "Compare · light",  0.20, "Shown good and bad answers, pushed least (DPO, β=0.20)"),
 ]
 
 
